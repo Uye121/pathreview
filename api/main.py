@@ -1,11 +1,14 @@
+import redis
+import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
-import structlog
+from fastapi.responses import JSONResponse
 
+from api.middleware.rate_limit import RateLimitMiddleware
 from api.middleware.request_id import RequestIDMiddleware
-from api.routes import auth, profiles, reviews, health
+from api.routes import auth, health, profiles, reviews
+from core.config import settings
 from core.database import init_db
 
 log = structlog.get_logger()
@@ -30,9 +33,7 @@ def custom_openapi():
         routes=app.routes,
     )
 
-    openapi_schema["info"]["x-logo"] = {
-        "url": "https://pathreview.example.com/logo.png"
-    }
+    openapi_schema["info"]["x-logo"] = {"url": "https://pathreview.example.com/logo.png"}
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
@@ -48,6 +49,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Add per-IP + per-user rate limiting middleware (runs for public and
+# authenticated routes). trust_proxy stays off until a known proxy fronts the
+# API, otherwise clients could spoof X-Forwarded-For to dodge the limit.
+app.add_middleware(
+    RateLimitMiddleware,
+    redis_client=redis.Redis.from_url(settings.redis_url),
+    limit=settings.rate_limit_per_minute,
 )
 
 # Add request ID middleware
