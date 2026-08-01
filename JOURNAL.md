@@ -41,16 +41,19 @@ Pathview currently rate limits requests for authenticated users, but not for una
 
 ### Check-in 2 (end of week)
 
-**PR link:** [link to your submitted pull request]
+**PR link:** https://github.com/Uye121/pathreview/pull/1
 
-**Branch:** [the branch name you worked on, e.g. `fix/123-short-description`]
+**Branch:** `feat/70-rate-limiting-per-ip`
 
 **What you built:**
-[1–3 sentences summarizing what your fix does and how it works]
+A secondary RateLimitMiddleware that uses client IP address to rate limit requests regardless of user authentication. It returns 429 to users making too many requests at a given time. It uses a module-level Redis client that fails open on errors, ensuring the API remains available even when Redis is down.
 
 **Tests added or updated:**
-[Which test files did you touch? What do they cover?]
+Created [tests/unit/test_rate_limit_middleware.py](./tests/unit/test_rate_limit_middleware.py) with 9 tests. These tests validate the rate limiting middleware's core behavior. They verify that requests below the limit succeed while the (limit+1)th request receives a 429 response, and that rate limits are enforced independently per IP address and per authenticated user. The tests also confirm that X-Forwarded-For headers are only respected when trust_proxy is enabled, preventing IP spoofing. Additionally, they ensure that exempt paths like /health bypass rate limiting entirely. Finally, the tests exercise the fail-open mechanism using a BrokenRedis mock, confirming that when Redis is unreachable, the API continues to accept all requests rather than blocking traffic.
 
-**Self-review confirmation:** [ ] make check passes  [ ] make test-unit passes
 
-**Draft PR feedback received from:** [name or Slack handle, or "none"]
+**Self-review confirmation:** [x] make check passes  [x] make test-unit passes
+
+**Draft PR feedback received from:** 
+[kaiser1x](https://github.com/Uye121/pathreview/pull/1#issuecomment-5137231482)
+The PR feedbacks were addressed in commit `62439960ad02a0bcaaee7706767e9d70db10c899` by creating a module-level Redis client that is accessible anywhere in the application and a comment on the significance of ordering the middleware with `RequestIDMiddleware` being first to bind the requests with ID before `RateLimitMiddleware` can make use of the ID in logging.
