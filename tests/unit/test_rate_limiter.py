@@ -1,8 +1,8 @@
 """Tests for rate_limiter.py"""
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch
-import time
 
 from safety.rate_limiter import RateLimiter
 
@@ -12,16 +12,16 @@ class TestRateLimiter:
     """Test suite for RateLimiter."""
 
     @pytest.fixture
-    def mock_redis(self):
+    def mock_redis(self) -> Mock:
         """Create a mock Redis client."""
         return Mock()
 
     @pytest.fixture
-    def limiter(self, mock_redis):
+    def limiter(self, mock_redis: Mock) -> RateLimiter:
         """Create a RateLimiter instance with mocked Redis."""
         return RateLimiter(mock_redis)
 
-    def test_first_request_allowed(self, limiter, mock_redis):
+    def test_first_request_allowed(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test first request is allowed."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=0)
@@ -33,7 +33,7 @@ class TestRateLimiter:
         assert allowed is True
         assert remaining == 9  # limit - current_count - 1
 
-    def test_requests_up_to_limit_allowed(self, limiter, mock_redis):
+    def test_requests_up_to_limit_allowed(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test requests up to limit are all allowed."""
         limit = 5
         mock_redis.zremrangebyscore = Mock()
@@ -49,7 +49,7 @@ class TestRateLimiter:
             assert allowed is True
             assert 0 <= remaining <= limit
 
-    def test_request_at_limit_plus_one_denied(self, limiter, mock_redis):
+    def test_request_at_limit_plus_one_denied(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test request at limit+1 is denied."""
         limit = 5
         mock_redis.zremrangebyscore = Mock()
@@ -60,7 +60,7 @@ class TestRateLimiter:
         assert allowed is False
         assert remaining == 0
 
-    def test_remaining_count_correct(self, limiter, mock_redis):
+    def test_remaining_count_correct(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test remaining count is calculated correctly."""
         limit = 10
         current = 3
@@ -75,13 +75,15 @@ class TestRateLimiter:
         assert allowed is True
         assert remaining == limit - current - 1  # 10 - 3 - 1 = 6
 
-    def test_rolling_window_removes_old_entries(self, limiter, mock_redis):
+    def test_rolling_window_removes_old_entries(
+        self, limiter: RateLimiter, mock_redis: Mock
+    ) -> None:
         """Test rolling window removes entries older than 60 seconds."""
         mock_redis.zcard = Mock(return_value=0)
         mock_redis.zadd = Mock()
         mock_redis.expire = Mock()
 
-        with patch('time.time', return_value=1000):
+        with patch("time.time", return_value=1000):
             limiter.check_rate_limit("user123", limit=10, window_seconds=60)
 
         # zremrangebyscore should be called to remove entries older than window_start
@@ -93,7 +95,9 @@ class TestRateLimiter:
         # Third argument should be approximately 1000 - 60 = 940
         assert 930 < call_args[0][2] < 950
 
-    def test_different_identifiers_independent(self, limiter, mock_redis):
+    def test_different_identifiers_independent(
+        self, limiter: RateLimiter, mock_redis: Mock
+    ) -> None:
         """Test different identifiers have independent limits."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=0)
@@ -107,7 +111,7 @@ class TestRateLimiter:
         calls = mock_redis.zadd.call_args_list
         assert len(calls) == 2
 
-    def test_key_format_correct(self, limiter, mock_redis):
+    def test_key_format_correct(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test that Redis key format is correct."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=0)
@@ -120,14 +124,14 @@ class TestRateLimiter:
         zrem_key = mock_redis.zremrangebyscore.call_args[0][0]
         assert zrem_key == "rate_limit:test_user"
 
-    def test_entry_added_to_redis(self, limiter, mock_redis):
+    def test_entry_added_to_redis(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test that request entry is added to Redis."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=0)
         mock_redis.zadd = Mock()
         mock_redis.expire = Mock()
 
-        with patch('time.time', return_value=1000):
+        with patch("time.time", return_value=1000):
             limiter.check_rate_limit("user123", limit=10)
 
         # zadd should be called with key and score
@@ -139,7 +143,7 @@ class TestRateLimiter:
         assert key == "rate_limit:user123"
         assert isinstance(value_dict, dict)
 
-    def test_expiry_set_correctly(self, limiter, mock_redis):
+    def test_expiry_set_correctly(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test that Redis key expiry is set."""
         window = 60
         mock_redis.zremrangebyscore = Mock()
@@ -154,7 +158,7 @@ class TestRateLimiter:
         call_args = mock_redis.expire.call_args
         assert call_args[0][1] == window + 1
 
-    def test_custom_window_size(self, limiter, mock_redis):
+    def test_custom_window_size(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test custom window size is respected."""
         custom_window = 120
         mock_redis.zremrangebyscore = Mock()
@@ -162,7 +166,7 @@ class TestRateLimiter:
         mock_redis.zadd = Mock()
         mock_redis.expire = Mock()
 
-        with patch('time.time', return_value=1000):
+        with patch("time.time", return_value=1000):
             limiter.check_rate_limit("user123", limit=10, window_seconds=custom_window)
 
         # Window start should be calculated from custom window
@@ -170,18 +174,18 @@ class TestRateLimiter:
         window_start = call_args[0][2]
         assert 870 < window_start < 890  # 1000 - 120
 
-    def test_redis_error_handling(self, limiter, mock_redis):
+    def test_redis_error_handling(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test handling of Redis errors."""
         mock_redis.zremrangebyscore = Mock(side_effect=Exception("Redis error"))
 
         # Should handle error gracefully
-        with patch('safety.rate_limiter.logger'):
+        with patch("safety.rate_limiter.logger"):
             allowed, remaining = limiter.check_rate_limit("user123", limit=10)
 
         # Per code comment, "Fail open on Redis error"
         assert allowed is True
 
-    def test_zero_limit(self, limiter, mock_redis):
+    def test_zero_limit(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test with zero limit."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=0)
@@ -190,7 +194,7 @@ class TestRateLimiter:
 
         assert allowed is False
 
-    def test_negative_limit(self, limiter, mock_redis):
+    def test_negative_limit(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test with negative limit (edge case)."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=0)
@@ -201,7 +205,7 @@ class TestRateLimiter:
         # Should treat as error condition
         assert isinstance(allowed, bool)
 
-    def test_large_limit(self, limiter, mock_redis):
+    def test_large_limit(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test with large limit."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=1000)
@@ -214,7 +218,7 @@ class TestRateLimiter:
         assert allowed is True
         assert remaining == large_limit - 1000 - 1
 
-    def test_return_tuple_structure(self, limiter, mock_redis):
+    def test_return_tuple_structure(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test return value is (bool, int) tuple."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=0)
@@ -229,7 +233,7 @@ class TestRateLimiter:
         assert isinstance(allowed, bool)
         assert isinstance(remaining, int)
 
-    def test_multiple_requests_same_user(self, limiter, mock_redis):
+    def test_multiple_requests_same_user(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test multiple requests from same user."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.expire = Mock()
@@ -247,7 +251,7 @@ class TestRateLimiter:
         assert allowed2 is True
         assert remaining2 < remaining1
 
-    def test_time_based_window_calculation(self, limiter, mock_redis):
+    def test_time_based_window_calculation(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test that window calculation uses current time."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=0)
@@ -255,19 +259,19 @@ class TestRateLimiter:
         mock_redis.expire = Mock()
 
         # First call at time 1000
-        with patch('time.time', return_value=1000):
+        with patch("time.time", return_value=1000):
             limiter.check_rate_limit("user123", limit=10, window_seconds=60)
             first_call_time = mock_redis.zadd.call_args[0][1]
 
         # Second call at time 1030
-        with patch('time.time', return_value=1030):
+        with patch("time.time", return_value=1030):
             limiter.check_rate_limit("user123", limit=10, window_seconds=60)
             second_call_time = mock_redis.zadd.call_args[0][1]
 
         # Times should be different
         assert first_call_time != second_call_time
 
-    def test_ip_address_as_identifier(self, limiter, mock_redis):
+    def test_ip_address_as_identifier(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test using IP address as identifier."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=0)
@@ -280,7 +284,7 @@ class TestRateLimiter:
         call_args = mock_redis.zremrangebyscore.call_args
         assert "192.168.1.1" in call_args[0][0]
 
-    def test_api_key_as_identifier(self, limiter, mock_redis):
+    def test_api_key_as_identifier(self, limiter: RateLimiter, mock_redis: Mock) -> None:
         """Test using API key as identifier."""
         mock_redis.zremrangebyscore = Mock()
         mock_redis.zcard = Mock(return_value=0)
