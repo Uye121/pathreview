@@ -57,3 +57,33 @@ Created [tests/unit/test_rate_limit_middleware.py](./tests/unit/test_rate_limit_
 **Draft PR feedback received from:** 
 [kaiser1x](https://github.com/Uye121/pathreview/pull/1#issuecomment-5137231482)
 The PR feedbacks were addressed in commit `62439960ad02a0bcaaee7706767e9d70db10c899` by creating a module-level Redis client that is accessible anywhere in the application and a comment on the significance of ordering the middleware with `RequestIDMiddleware` being first to bind the requests with ID before `RateLimitMiddleware` can make use of the ID in logging.
+
+## Week 10 — Iteration & reflection
+
+### Reviewer feedback
+
+**Feedback received:** [x] Yes  [ ] No — still awaiting review
+
+**Summary of feedback:**
+The reviewer provided positive feedback, noting that the middleware properly extends the existing RateLimiter without modifying its core behavior, and that using constructor injection for dependencies keeps the code clean and testable. They confirmed that the key requirements is enforced per-IP separation and per-user limitation, namespacing Redis keys to avoid collisions, handling authentication edge cases gracefully, and including solid test coverage for proxies, separate budgets, fail-open behavior, and exempt routes. They offered two minor suggestions for improvement: adding a brief comment in `api/main.py` to document the middleware registration order relative to RequestIDMiddleware and Redis client implementation as a shared application dependency or initialize at startup lifecycle if Redis usage grows in the future. Overall, they felt the implementation was well-scoped, aligned with the requirements, and the tests provided good confidence in both expected behavior and edge cases.
+
+**How you responded:**
+I addressed the reviewer's feedback by adding a comment in api/main.py that explains the middleware ordering rationale—specifically, why RequestIDMiddleware is registered after RateLimitMiddleware to ensure that rate-limit responses (429s) still include a request ID in the logs. For the Redis client, I kept the module-wide initialization for simplicity and accessibility across the application, but I also store it in `app.state.redis` during the lifespan startup so it can be consistently accessed through the application state when needed, giving us flexibility in how different parts of the codebase retrieve the client.
+---
+
+### Reflection
+
+**What was harder than you expected?**
+Balancing the implementation approach without over-engineering the solution or introducing unintended side effects was harder than I expected. There were several viable paths to implement the secondary rate-limiting layer, each with different trade-offs. I had to spend time understanding the different components (middleware ordering, Redis key structures, request context extraction) to determine the simplest approach that still met all the requirements. Working with the LLM helped me explore these options efficiently, but it took some back-and-forth to converge on a clean solution that would not introduce unnecessary abstractions.
+
+**What did you learn about working in a large codebase?**
+I learned that you don't need to understand every detail of the codebase to be effective. Gaining a high-level understanding of the application's architecture and core flows is usually sufficient. After that, I could focus on the specific files and modules that the feature touches. This targeted approach helped me move faster and avoid getting overwhelmed by the size of the codebase, while still ensuring I understood the relevant context to make safe changes.
+
+**How did AI tools help — and where did they fall short?**
+AI tools helped me quickly generate multiple design options and compare their trade-offs, which made the decision-making process much more efficient. The main limitation was that the generated code often focused only on the core happy path and omitted important edge cases—things like handling malformed headers or Redis timeouts. I had to actively review and extend the AI's output to make it production-ready.
+
+**What would you do differently if you started over?**
+I'd start by studying the architecture of network middlewares more thoroughly. For example, how they chain together, request headers, and constraints. A stronger foundation there would have made the rest of the work flow more smoothly.
+
+**What are you most proud of from this module?**
+I am proud of contributing to a open source project, even if it's a sandbox project. The experience showed me how much thoughtful design and documentation goes into open-source work. Contributing to it helped me learn and work with things that are on my to-learn bucket list.
